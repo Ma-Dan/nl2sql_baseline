@@ -25,12 +25,20 @@ class DBEngine:
         elif condition_relation == 2:
             wr = " OR "
 
-        table_info = self.conn.query('SELECT sql from sqlite_master WHERE tbl_name = :name', name=table_id).all()[0].sql
-        schema_str = schema_re.findall(table_info)[0]
         schema = {}
-        for tup in schema_str.split(','):
-            c, t = tup.split(' ')
-            schema[c] = t
+
+        table_info = ""
+        queryResult = self.conn.query('SELECT sql from sqlite_master WHERE tbl_name = :name', name=table_id).all()
+        if len(queryResult) > 0:
+            table_info = queryResult[0].sql
+
+        schema_str = ""
+        schema_reResult = schema_re.findall(table_info)
+        if len(schema_reResult) > 0:
+            schema_str = schema_reResult[0]
+            for tup in schema_str.split(','):
+                c, t = tup.split(' ')
+                schema[c] = t
 
         tmp = ""
         for sel, agg in zip(select_index, aggregation_index):
@@ -47,7 +55,7 @@ class DBEngine:
         for col_index, op, val in conditions:
             if lower and (isinstance(val, str) or isinstance(val, str)):
                 val = val.lower()
-            if schema['col_{}'.format(col_index+1)] == 'real' and not isinstance(val, (int, float)):
+            if schema.has_key('col_{}'.format(col_index+1)) and schema['col_{}'.format(col_index+1)] == 'real' and not isinstance(val, (int, float)):
                 try:
                     val = float(parse_decimal(val, locale='en_US'))
                 except NumberFormatError as e:
@@ -62,5 +70,8 @@ class DBEngine:
         if where_clause:
             where_str = 'WHERE ' + wr.join(where_clause)
         query = 'SELECT {} FROM {} {}'.format(tmp, table_id, where_str)
-        out = self.conn.query(query, **where_map)
-        return out.as_dict()
+        try:
+            out = self.conn.query(query, **where_map)
+            return out.as_dict()
+        except:
+            pass
